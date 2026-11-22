@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      #app-loading { display: none; }
+      .js-loading #root { display: none; }
+      .js-loading #app-loading { display: flex; min-height: 100svh; flex-direction: column; background: #f8fafc; color: #0b2240; font-family: system-ui, sans-serif; }
+      .js-loading #app-loading .boot-header { display: flex; align-items: center; gap: .75rem; min-height: 4rem; padding: 0 max(1.25rem, calc((100vw - 76rem) / 2)); background: #0b2240; color: white; font-size: 1rem; font-weight: 700; }
+      .js-loading #app-loading .boot-header img { width: 2rem; height: 2rem; }
+      .js-loading #app-loading .boot-main { width: min(100% - 2.5rem, 76rem); margin: clamp(3rem, 10vh, 7rem) auto; }
+      .js-loading #app-loading .boot-kicker { width: 7.5rem; height: .7rem; border-radius: 1rem; background: #d4af37; }
+      .js-loading #app-loading .boot-title { width: min(75%, 30rem); height: clamp(2.5rem, 7vw, 4.5rem); margin-top: 1.5rem; border-radius: .65rem; background: #dce5ee; }
+      .js-loading #app-loading .boot-line { width: min(90%, 39rem); height: 1rem; margin-top: 1.25rem; border-radius: .4rem; background: #e6edf3; }
+      .js-loading #app-loading .boot-line.short { width: min(60%, 24rem); margin-top: .65rem; }
+      .dark.js-loading #app-loading { background: #071120; color: white; }
+      .dark.js-loading #app-loading .boot-title { background: #1e3a5f; }
+      .dark.js-loading #app-loading .boot-line { background: #102a43; }
+    </style>
+    <script>
+      document.documentElement.classList.add('js-loading');
+      window.setTimeout(() => {
+        if (!document.documentElement.classList.contains('js-loading')) return;
+        document.documentElement.classList.remove('js-loading');
+        document.getElementById('app-loading')?.remove();
+      }, 12000);
+    </script>
+    <link rel="icon" type="image/svg+xml" href="/brand-mark.svg" />
+    <title>PCSS Pioneer Clubs | Student Organizations</title>
+    <meta name="description" content="Centralized multi-campus student club directory, microsites, and visual page builder for Pioneer Charter School of Science (PCSS I Everett & PCSS II Saugus)." />
+    <meta name="author" content="Aarti S Ravikumar" />
+    <link rel="canonical" href="https://pcssclubs.org/" />
+    <meta property="og:title" content="PCSS Pioneer Clubs | Student Organizations" />
+    <meta property="og:description" content="Centralized multi-campus student club directory, microsites, and visual page builder for Pioneer Charter School of Science (PCSS I Everett & PCSS II Saugus)." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://pcssclubs.org/" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "Pioneer Clubs",
+        "description": "Student organization and club portal across Pioneer Charter School of Science campuses.",
+        "creator": {
+          "@type": "Person",
+          "name": "Aarti S Ravikumar",
+          "url": "https://ai-aarti.com",
+          "affiliation": {
+            "@type": "EducationalOrganization",
+            "name": "PCSS II",
+            "url": "https://saugus.pioneercss.org"
+          }
+        }
+      }
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400..700;1,9..40,400..700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet" />
+    <script src="/theme-init.js"></script>
+  </head>
+  <body class="bg-[#F8FAFC] dark:bg-[#071120] text-[#1E293B] dark:text-slate-100 antialiased selection:bg-[#0B2240] selection:text-white dark:selection:bg-[#8B1E24]">
+    <div id="app-loading" role="status" aria-label="Opening Pioneer Clubs">
+      <div class="boot-header"><img src="/brand-mark.svg" alt="" />Pioneer Clubs</div>
+      <div class="boot-main" aria-hidden="true"><div class="boot-kicker"></div><div class="boot-title"></div><div class="boot-line"></div><div class="boot-line short"></div></div>
+    </div>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

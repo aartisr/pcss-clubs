@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmit": false,
+    "allowImportingTsExtensions": false,
+    "rootDir": ".",
+    "outDir": "tmp/function-esm",
+    "types": ["node"]
+  },
+  "include": ["api/auth/*.ts", "src/server/auth.ts", "src/shared/authReturn.ts"],
+  "exclude": ["dist", "tmp"]
+}

@@ -1,0 +1,45 @@
+{
+  "name": "pcss-clubs",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server/index.ts",
+    "start": "node --import tsx src/server/index.ts",
+    "build": "vite build && node --import tsx scripts/generate-search-pages.ts",
+    "prebuild": "npm run check:build-deps && npm run check:production-auth && npm run lint && npm test && npm run check:functions",
+    "check:build-deps": "node scripts/check-build-deps.cjs",
+    "check:production-auth": "node --import tsx scripts/check-production-auth.ts",
+    "postbuild": "node --import tsx --test tests/generated-pages.test.ts tests/bundle-budget.test.ts",
+    "test": "node --import tsx --test tests/puck-pages.test.tsx tests/registry-model.test.ts tests/auth.test.ts tests/auth-paths.test.ts tests/public-browsing.test.tsx tests/security.test.tsx tests/site-review.test.tsx tests/support-center.test.ts tests/member-schedule.test.ts",
+    "preview": "vite preview",
+    "clean": "rm -rf dist",
+    "lint": "tsc --noEmit",
+    "check:functions": "node -e \"require('node:fs').rmSync('tmp/function-esm', { recursive: true, force: true })\" && tsc -p tsconfig.functions.json && node --import tsx --test tests/function-runtime.test.ts"
+  },
+  "dependencies": {
+    "@measured/puck": "^0.20.2",
+    "@tailwindcss/vite": "^4.3.3",
+    "@vitejs/plugin-react": "4.7.0",
+    "express": "^4.21.2",
+    "lucide-react": "^0.546.0",
+    "openid-client": "^6.9.0",
+    "react": "^19.0.1",
+    "react-dom": "^19.0.1",
+    "react-router-dom": "^7.18.5",
+    "vite": "6.4.6"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.14.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "jose": "^6.2.17",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.21.0",
+    "typescript": "^7.0.2"
+  }
+}
