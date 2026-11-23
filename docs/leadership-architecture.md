@@ -1,67 +1,100 @@
-# Pioneer Clubs: how the portal fits together
+# Pioneer Clubs: the leadership view
 
-**Leadership view · November 2026 · current repository, not a claim of live production readiness**
+**Updated November 22, 2026 · Based on the current repository and reported production behavior**
 
-Pioneer Clubs gives everyone a place to discover student organizations. A verified school account adds a personal space. People granted editing access can shape club and campus pages. The same reusable page system serves the directory, each campus, and each club.
+> **In one minute:** Pioneer Clubs is a student-run place to discover clubs across PCSS campuses. Anyone can browse. A school member can save clubs and request a club website. A small group of approved editors can design pages. The portal is still in development and awaits school administration approval. Its club details have not yet been verified for public launch.
+
+## The experience, in three doors
+
+| Person | What they can do | What they do not need to do |
+| --- | --- | --- |
+| **Visitor** | Browse the directory, campus and club pages, Support Center, credits, and policies. | Sign in to see public information. |
+| **School member** | Sign in with an eligible school Google account; save clubs, see a personal weekly view, and submit a club website request. | Enter an editing area to use the portal. |
+| **Approved editor** | Use the visual editor to work on home, campus, club, and credits pages and club records. | Give every member editing access. |
+
+The site presents a clear way back to public browsing when sign-in is unavailable. Editing is a separate permission checked by the server; it is not a separate kind of Google account.
+
+```mermaid
+flowchart LR
+  V["Visitor<br/>Explore clubs"] --> W["Pioneer Clubs website"]
+  M["School member<br/>Google sign-in"] --> W
+  E["Approved editor<br/>Google sign-in"] --> W
+  W --> P["Public pages<br/>Directory · campus · club · support"]
+  W --> S["My space<br/>Saved clubs · weekly view"]
+  W --> D["Visual editor<br/>Page design · club records"]
+  S --> R["Club website request<br/>Sent to portal team for review"]
+```
+
+**A request is a starting point, not an approval.** The portal team reviews club details and any required school approvals before a page is made public.
+
+## The platform in layers
+
+Read this diagram from top to bottom: each layer supports the one above it. The labels describe responsibilities, so leaders can see where a change or problem belongs without knowing the code.
 
 ```mermaid
 flowchart TB
-  visitor["Anyone<br/>Browse clubs without signing in"]
-  member["School member<br/>Save clubs and request a club site"]
-  editor["Approved editor<br/>Design pages and manage club records"]
+  A["1. What people see<br/>Public pages · My space · visual editor · Support Center"]
+  B["2. Website components<br/>Club directory and page blocks · saved clubs and weekly view · request form"]
+  C["3. Server safeguards<br/>School session and editor permissions · request validation and email handoff"]
+  D["4. Information and outside services<br/>Project content · browser-only drafts and saved clubs · Google sign-in · Brevo or Resend"]
+  E["5. Delivery foundation<br/>Automated checks · Vercel website and server functions"]
 
-  subgraph portal["Pioneer Clubs website · hosted on Vercel"]
-    public["Public experience<br/>Directory · campus hubs · club pages<br/>Support · credits · policies"]
-    personal["My space<br/>Saved clubs · personal schedule"]
-    edit["Visual editor<br/>Reusable page blocks and club registry"]
-    access["Access check<br/>Member or editor permissions"]
-  end
-
-  google["Google school sign-in"]
-  browser["Current browser storage<br/>Saved clubs and editor changes"]
-  reviewed["Reviewed club information<br/>Checked into the project"]
-  checks["Automated checks and deployment"]
-  email["Email delivery service<br/>Notifies portal team when configured"]
-
-  visitor --> public
-  member --> google --> access --> personal
-  editor --> google
-  access -- "approved editors" --> edit
-  member --> public
-  editor --> public
-  personal <--> browser
-  edit <--> browser
-  personal --> email
-  reviewed --> checks --> public
+  A --> B
+  B --> C
+  C --> D
+  D --> E
 ```
 
-## What the diagram means
+**Important boundary:** Public browsing does not require the sign-in safeguard. The server checks school identity for member actions and editor access. Browser-only data stays on that device; the current platform has no shared content database or request ticket store.
 
-1. **Discovery stays open.** Visitors can browse public club information and support without an account. Sign-in is for personal features or authorized editing.
-2. **Access follows the person's role.** Google confirms the school account; the portal checks whether that person is a school member or an approved editor. The editing route is restricted to the latter.
-3. **Publication is deliberate.** Public club information is built from reviewed project records and deployed after automated checks. Editor changes and saved clubs currently remain in that browser. A signed-in member can send a club-site request within the site when email delivery is configured. The team reviews it before publishing anything.
+## How information reaches people
 
-## Current capability and next decision
+There are currently **two very different kinds of changes**:
 
-| Area | In the repository today | Before a school-wide launch |
+1. **Shared website content** starts in the project, passes automated checks, and is deployed to the hosted site. This is how the current default club information and page designs reach visitors.
+2. **Changes made in the visual editor** are saved in that editor's browser. Saved clubs are also kept in the member's browser, under their school account. Neither is a shared, cross-device publishing system today. An editor can export and import a snapshot, but that is a manual handoff.
+
+This distinction matters: seeing an edit on one device does **not** mean every visitor sees it. A shared publishing service with review and rollback is the next architectural step if PCSS wants routine multi-editor updates.
+
+```mermaid
+flowchart LR
+  C["Project content<br/>Still needs verification"] --> T["Automated checks"] --> H["Hosted public site"]
+  B["Editor's browser"] --> L["Local page drafts and club edits"]
+  L -. "No automatic publication" .-> H
+  Q["Member request"] --> A["Secure website service"] --> N["Email provider"] --> I["Portal team inbox"]
+  I --> X["Human review and school approval"]
+```
+
+The request form checks the signed-in school account on the server, validates the submission, and sends one notification through a configurable email service. Brevo and Resend adapters are implemented. The student's browser never receives the email key or chooses the recipient. When an email provider accepts a request, the site says it was **passed to the email service**; that does not prove inbox delivery. There is no shared request database or guaranteed ticket tracking yet.
+
+## Where the project stands
+
+| Area | Current state | Leadership implication |
 | --- | --- | --- |
-| Public discovery | Searchable directory, campus and club pages, support, credits, and policies | Verify and approve real campus, club, advisor, schedule, and media details |
-| School access | Google sign-in with separate member and editor permissions | Resolve and verify the production Google OAuth `401 invalid_client` configuration, then test sign-in on the production domain |
-| Page creation | Reusable visual blocks for home, campus, club, and credits pages | Add shared, reviewed publishing if edits must appear across devices and for all visitors |
-| Personal space | Saved clubs and a personal schedule | Add shared account storage if cross-device continuity is required |
-| Club-site requests | Signed-in members can submit within the site; the server passes a notification to an email provider when configured | Verify the sender, intake mailbox, production sign-in, and live delivery; add durable records if guaranteed tracking is needed |
+| **Public experience** | Directory, campus and club pages, Support Center, credits, and policies are implemented. Reusable visual blocks power home, campus, club, and credits content. | Review the content and experience with actual students and staff before promotion. |
+| **School sign-in** | Member and editor permissions are implemented. The recent production request reached the email service from a signed-in account; that is evidence for this path, not proof of every sign-in journey. | Run a short production sign-in test across new, returning, switched, and signed-out accounts. |
+| **Club information** | Checked-in club, advisor, schedule, and media details are explicitly marked unverified. Public search indexing remains held. | Assign a school reviewer and approve real details before launch. |
+| **Editor and personal data** | Browser storage supports current drafts and saved clubs. There is no shared editor publishing or cross-device member sync. | Decide whether a pilot can use browser-local work or needs shared storage and review first. |
+| **Club website requests** | In-site form, server checks, and replaceable email providers are implemented. The most recent reported production sends were rejected by Brevo with `401 unauthorized`. The cause is still unconfirmed; account IP restrictions are a plausible explanation. | Resolve provider access and confirm one test request in the monitored inbox before inviting students to use the form. |
+| **Project status** | “To Be Approved” and “In Development” notices are centrally configurable and currently on by default. | Keep the notice until the respective approval and development work is complete. |
 
-The current site is a working prototype. Its sample club data is marked **unverified** and public indexing is disabled. The review notice can be turned on or off by deployment configuration; it does not substitute for school approval.
+## Decisions that unlock a responsible launch
 
-## Component map for the delivery team
+1. **Name content reviewers.** Confirm campus, club, advisor, meeting, media, credits, and policy details; decide who signs off on changes.
+2. **Prove the complete request journey.** Resolve the production email rejection, then test from school sign-in through inbox receipt and a human response. Keep a clear alternate contact path while it is unavailable.
+3. **Choose the publishing model.** A small pilot can use reviewed project releases and browser-local editor work. Broad, frequent editing needs shared storage, approval, audit history, and rollback.
+4. **Define operating ownership.** Identify who monitors the intake inbox, handles corrections, manages access, and turns off the review notice after approval.
 
-| Leadership concept | Main implementation |
+## For the delivery team
+
+| Building block | Where it lives |
 | --- | --- |
-| Public website and navigation | `src/App.tsx`, `src/pages/PortalDirectoryPage.tsx`, `src/pages/ClubSitePage.tsx` |
-| Reusable page design | `src/puck/`, `src/pages/PuckDocumentPage.tsx` |
-| Club directory and local edits | `src/data/registry.ts`, `src/context/RegistryContext.tsx`, `src/puck/pageLayoutStore.ts` |
-| Sign-in and permissions | `api/auth/`, `src/server/auth.ts`, `src/context/AuthContext.tsx`, `src/components/ProtectedEditorRoute.tsx` |
-| Personal space and requests | `src/pages/MySpacePage.tsx`, `src/context/SavedClubsContext.tsx`, `src/pages/SupportPage.tsx` |
-| Release checks and hosting | `.github/workflows/ci.yml`, `scripts/generate-search-pages.ts`, `vercel.json` |
+| Routes and page loading | [`src/App.tsx`](../src/App.tsx) |
+| Public club data and publication gate | [`src/data/registry.ts`](../src/data/registry.ts), [`src/data/publication.ts`](../src/data/publication.ts) |
+| Visual pages and local drafts | [`src/puck/`](../src/puck/), [`src/context/RegistryContext.tsx`](../src/context/RegistryContext.tsx) |
+| Member space and browser-local saved clubs | [`src/pages/MySpacePage.tsx`](../src/pages/MySpacePage.tsx), [`src/context/SavedClubsContext.tsx`](../src/context/SavedClubsContext.tsx) |
+| Sign-in and editor authorization | [`src/server/auth.ts`](../src/server/auth.ts), [`src/components/ProtectedEditorRoute.tsx`](../src/components/ProtectedEditorRoute.tsx) |
+| Support and request delivery | [`src/pages/SupportPage.tsx`](../src/pages/SupportPage.tsx), [`src/server/clubSiteRequests.ts`](../src/server/clubSiteRequests.ts), [`src/server/email/`](../src/server/email/) |
+| Review notice and release checks | [`src/data/siteReview.ts`](../src/data/siteReview.ts), [`package.json`](../package.json), [CI workflow](../.github/workflows/ci.yml) |
 
-**Leadership proposition:** The portal already provides a coherent path from *discover a club* to *join the school community* to *give a club its own presence*. The next phase is to verify school content, make production sign-in reliable, and decide whether shared publishing is needed before inviting broader use.
+More detail: [email provider setup](email-provider-setup.md), [club request options](automated-club-site-requests.md), and [environment and release plan](environments-and-release.md). The release plan describes proposed stages; it does not mean every stage is deployed.
