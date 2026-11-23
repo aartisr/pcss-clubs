@@ -36,6 +36,19 @@ async function withOidcEnvironment(values: Record<string, string>, run: () => Pr
   }
 }
 
+async function withClubRequestEnvironment(values: Record<string, string>, run: () => Promise<void>): Promise<void> {
+  const relevant = (key: string) => key.startsWith('OIDC_') || key.startsWith('BREVO_') || key.startsWith('RESEND_') || key === 'EMAIL_PROVIDER' || key === 'EMAIL_SENDER_EMAIL' || key === 'CLUB_SITE_REQUEST_RECIPIENT';
+  const previous = Object.fromEntries(Object.entries(process.env).filter(([key]) => relevant(key)));
+  for (const key of Object.keys(previous)) delete process.env[key];
+  Object.assign(process.env, values);
+  try {
+    await run();
+  } finally {
+    for (const key of Object.keys(process.env)) if (relevant(key)) delete process.env[key];
+    Object.assign(process.env, previous);
+  }
+}
+
 test('every emitted relative import is an existing JavaScript file', () => {
   const files = emittedFiles(emittedRoot);
   assert.ok(files.length >= 6, 'Expected all auth entries and their shared modules');
@@ -67,10 +80,23 @@ test('club request function loads through native Node ESM and fails closed witho
   const module = await import(pathToFileURL(path.join(emittedRoot, 'api/club-site-requests.js')).href);
   assert.equal(typeof module.POST, 'function');
   assert.equal(typeof module.GET, 'function');
-  assert.deepEqual(await (await module.GET(new Request(`${origin}/api/club-site-requests`))).json(), { available: false });
-  const response: Response = await module.POST(new Request(`${origin}/api/club-site-requests`, { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: '{}' }));
-  assert.equal(response.status, 503);
-  assert.equal((await response.json()).code, 'SIGN_IN_UNAVAILABLE');
+  await withClubRequestEnvironment({}, async () => {
+    assert.deepEqual(await (await module.GET(new Request(`${origin}/api/club-site-requests`))).json(), { available: false });
+    const response: Response = await module.POST(new Request(`${origin}/api/club-site-requests`, { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: '{}' }));
+    assert.equal(response.status, 503);
+    assert.equal((await response.json()).code, 'SIGN_IN_UNAVAILABLE');
+  });
+  await withClubRequestEnvironment({
+    OIDC_ISSUER: 'https://identity.example', OIDC_CLIENT_ID: 'client', OIDC_CLIENT_SECRET: 'secret',
+    OIDC_APP_ORIGIN: origin, OIDC_SESSION_SECRET: Buffer.alloc(32, 7).toString('base64url'),
+    OIDC_REQUIRED_HOSTED_DOMAIN: 'pioneercss.org', EMAIL_PROVIDER: 'brevo',
+    BREVO_API_KEY: 'test-key', EMAIL_SENDER_EMAIL: 'requests@pcssclubs.org',
+  }, async () => {
+    assert.deepEqual(await (await module.GET(new Request(`${origin}/api/club-site-requests`))).json(), { available: true });
+    const response: Response = await module.POST(new Request(`${origin}/api/club-site-requests`, { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: '{}' }));
+    assert.equal(response.status, 401);
+    assert.equal((await response.json()).code, 'SIGN_IN_REQUIRED');
+  });
 });
 
 test('deployed-style entrypoints give controlled responses without OIDC setup', async () => {
