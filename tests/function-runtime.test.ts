@@ -24,20 +24,9 @@ function emittedRoute(route: string): string {
   return path.join(emittedRoot, 'api/auth', `${route}.js`);
 }
 
-async function withOidcEnvironment(values: Record<string, string>, run: () => Promise<void>): Promise<void> {
-  const previous = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.startsWith('OIDC_')));
-  for (const key of Object.keys(previous)) delete process.env[key];
-  Object.assign(process.env, values);
-  try {
-    await run();
-  } finally {
-    for (const key of Object.keys(process.env)) if (key.startsWith('OIDC_')) delete process.env[key];
-    Object.assign(process.env, previous);
-  }
-}
+const clubRequestVariable = (key: string) => key.startsWith('OIDC_') || key.startsWith('BREVO_') || key.startsWith('RESEND_') || key === 'EMAIL_PROVIDER' || key === 'EMAIL_SENDER_EMAIL' || key === 'CLUB_SITE_REQUEST_RECIPIENT';
 
-async function withClubRequestEnvironment(values: Record<string, string>, run: () => Promise<void>): Promise<void> {
-  const relevant = (key: string) => key.startsWith('OIDC_') || key.startsWith('BREVO_') || key.startsWith('RESEND_') || key === 'EMAIL_PROVIDER' || key === 'EMAIL_SENDER_EMAIL' || key === 'CLUB_SITE_REQUEST_RECIPIENT';
+async function withEnvironment(values: Record<string, string>, relevant: (key: string) => boolean, run: () => Promise<void>): Promise<void> {
   const previous = Object.fromEntries(Object.entries(process.env).filter(([key]) => relevant(key)));
   for (const key of Object.keys(previous)) delete process.env[key];
   Object.assign(process.env, values);
@@ -48,6 +37,9 @@ async function withClubRequestEnvironment(values: Record<string, string>, run: (
     Object.assign(process.env, previous);
   }
 }
+
+const withOidcEnvironment = (values: Record<string, string>, run: () => Promise<void>) => withEnvironment(values, (key) => key.startsWith('OIDC_'), run);
+const withClubRequestEnvironment = (values: Record<string, string>, run: () => Promise<void>) => withEnvironment(values, clubRequestVariable, run);
 
 test('every emitted relative import is an existing JavaScript file', () => {
   const files = emittedFiles(emittedRoot);
@@ -76,27 +68,50 @@ test('all four emitted auth entries load through native Node ESM', async () => {
   }
 });
 
-test('club request function loads through native Node ESM and fails closed without sign-in', async () => {
+test('club request function loads through native Node ESM across deployment configurations', async () => {
   const module = await import(pathToFileURL(path.join(emittedRoot, 'api/club-site-requests.js')).href);
   assert.equal(typeof module.POST, 'function');
   assert.equal(typeof module.GET, 'function');
-  await withClubRequestEnvironment({}, async () => {
-    assert.deepEqual(await (await module.GET(new Request(`${origin}/api/club-site-requests`))).json(), { available: false });
-    const response: Response = await module.POST(new Request(`${origin}/api/club-site-requests`, { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: '{}' }));
-    assert.equal(response.status, 503);
-    assert.equal((await response.json()).code, 'SIGN_IN_UNAVAILABLE');
-  });
-  await withClubRequestEnvironment({
+  const auth = {
     OIDC_ISSUER: 'https://identity.example', OIDC_CLIENT_ID: 'client', OIDC_CLIENT_SECRET: 'secret',
     OIDC_APP_ORIGIN: origin, OIDC_SESSION_SECRET: Buffer.alloc(32, 7).toString('base64url'),
-    OIDC_REQUIRED_HOSTED_DOMAIN: 'pioneercss.org', EMAIL_PROVIDER: 'brevo',
-    BREVO_API_KEY: 'test-key', EMAIL_SENDER_EMAIL: 'requests@pcssclubs.org',
-  }, async () => {
-    assert.deepEqual(await (await module.GET(new Request(`${origin}/api/club-site-requests`))).json(), { available: true });
-    const response: Response = await module.POST(new Request(`${origin}/api/club-site-requests`, { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: '{}' }));
-    assert.equal(response.status, 401);
-    assert.equal((await response.json()).code, 'SIGN_IN_REQUIRED');
-  });
+    OIDC_REQUIRED_HOSTED_DOMAIN: 'pioneercss.org',
+  };
+  const brevo = { EMAIL_PROVIDER: 'brevo', BREVO_API_KEY: 'test-key', EMAIL_SENDER_EMAIL: 'requests@pcssclubs.org' };
+  const resend = { EMAIL_PROVIDER: 'resend', RESEND_API_KEY: 'test-key', EMAIL_SENDER_EMAIL: 'requests@pcssclubs.org' };
+  const cases = [
+    { name: 'unconfigured', values: {}, available: false, postStatus: 503, postCode: 'SIGN_IN_UNAVAILABLE' },
+    { name: 'email only', values: brevo, available: false, postStatus: 503, postCode: 'SIGN_IN_UNAVAILABLE' },
+    { name: 'invalid sign-in secret', values: { ...auth, OIDC_SESSION_SECRET: 'weak', ...brevo }, available: false, postStatus: 503, postCode: 'SIGN_IN_UNAVAILABLE' },
+    { name: 'school domain missing', values: { ...auth, OIDC_REQUIRED_HOSTED_DOMAIN: '', ...brevo }, available: false, postStatus: 503, postCode: 'SIGN_IN_UNAVAILABLE' },
+    { name: 'sign-in only', values: auth, available: false, postStatus: 401, postCode: 'SIGN_IN_REQUIRED' },
+    { name: 'provider disabled', values: { ...auth, ...brevo, EMAIL_PROVIDER: '' }, available: false, postStatus: 401, postCode: 'SIGN_IN_REQUIRED' },
+    { name: 'Brevo key missing', values: { ...auth, EMAIL_PROVIDER: 'brevo', EMAIL_SENDER_EMAIL: brevo.EMAIL_SENDER_EMAIL }, available: false, postStatus: 401, postCode: 'SIGN_IN_REQUIRED' },
+    { name: 'sender malformed', values: { ...auth, ...brevo, EMAIL_SENDER_EMAIL: 'bad-address' }, available: false, postStatus: 401, postCode: 'SIGN_IN_REQUIRED' },
+    { name: 'unsupported provider', values: { ...auth, ...brevo, EMAIL_PROVIDER: 'unsupported' }, available: false, postStatus: 401, postCode: 'SIGN_IN_REQUIRED' },
+    { name: 'Brevo configured', values: { ...auth, ...brevo }, available: true, postStatus: 401, postCode: 'SIGN_IN_REQUIRED' },
+    { name: 'Resend configured', values: { ...auth, ...resend }, available: true, postStatus: 401, postCode: 'SIGN_IN_REQUIRED' },
+  ] as const;
+  for (const item of cases) {
+    await withClubRequestEnvironment(item.values, async () => {
+      const availability: Response = await module.GET(new Request(`${origin}/api/club-site-requests`));
+      assert.equal(availability.status, 200, item.name);
+      assert.equal(availability.headers.get('cache-control'), 'no-store', item.name);
+      assert.deepEqual(await availability.json(), { available: item.available }, item.name);
+      const response: Response = await module.POST(new Request(`${origin}/api/club-site-requests`, { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: '{}' }));
+      assert.equal(response.status, item.postStatus, item.name);
+      assert.deepEqual(await response.json(), { code: item.postCode }, item.name);
+    });
+  }
+});
+
+test('club request test environment restores inherited settings after a failure', async () => {
+  const before = Object.fromEntries(Object.entries(process.env).filter(([key]) => clubRequestVariable(key)));
+  await assert.rejects(() => withClubRequestEnvironment({ EMAIL_PROVIDER: 'test', OIDC_CLIENT_ID: 'test' }, async () => {
+    assert.equal(process.env.EMAIL_PROVIDER, 'test');
+    throw new Error('test interruption');
+  }), /test interruption/);
+  assert.deepEqual(Object.fromEntries(Object.entries(process.env).filter(([key]) => clubRequestVariable(key))), before);
 });
 
 test('deployed-style entrypoints give controlled responses without OIDC setup', async () => {

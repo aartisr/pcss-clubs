@@ -5,7 +5,7 @@ import { authHandler } from '../src/server/auth.ts';
 import { clubSiteRequestHandler } from '../src/server/clubSiteRequests.ts';
 import { BrevoEmailProvider } from '../src/server/email/brevo.ts';
 import { ResendEmailProvider } from '../src/server/email/resend.ts';
-import { EmailDeliveryError } from '../src/server/email/provider.ts';
+import { deliveryError, EmailDeliveryError, retryAfterSeconds } from '../src/server/email/provider.ts';
 import { getEmailSettings } from '../src/server/email/config.ts';
 import { emailConfigIssues } from '../scripts/check-email-config.ts';
 
@@ -37,6 +37,29 @@ test('email provider configuration is server-only and fails closed', () => {
   assert.deepEqual(emailConfigIssues({} as NodeJS.ProcessEnv), []);
   assert.deepEqual(emailConfigIssues(env as NodeJS.ProcessEnv), []);
   assert.equal(emailConfigIssues({ EMAIL_PROVIDER: 'brevo' } as NodeJS.ProcessEnv).length, 1);
+  for (const invalid of [
+    { ...env, EMAIL_PROVIDER: 'resend', RESEND_API_KEY: 'key', BREVO_SENDER_EMAIL: '' },
+    { ...env, EMAIL_PROVIDER: 'brevo', BREVO_API_KEY: '' },
+    { ...env, EMAIL_PROVIDER: 'brevo', CLUB_SITE_REQUEST_RECIPIENT: 'bad-address' },
+  ]) {
+    assert.equal(emailConfigIssues(invalid as NodeJS.ProcessEnv).length, 1);
+  }
+  assert.deepEqual(emailConfigIssues({ ...env, EMAIL_PROVIDER: 'resend', RESEND_API_KEY: 'key', EMAIL_SENDER_EMAIL: 'requests@pcssclubs.org' } as NodeJS.ProcessEnv), []);
+});
+
+test('provider failures expose bounded retry guidance without leaking response text', async () => {
+  assert.equal(retryAfterSeconds(null), undefined);
+  assert.equal(retryAfterSeconds('0'), undefined);
+  assert.equal(retryAfterSeconds('not-a-date'), undefined);
+  assert.equal(retryAfterSeconds('999999'), 86400);
+  const limited = await deliveryError(Response.json({ code: 'not_enough_credits', message: 'private provider detail' }, { status: 402, headers: { 'Retry-After': '120' } }));
+  assert.equal(limited.kind, 'rate-limited');
+  assert.equal(limited.providerCode, 'not_enough_credits');
+  assert.equal(limited.retryAfterSeconds, 120);
+  assert.equal(limited.message, 'rate-limited');
+  const html = await deliveryError(new Response('<html>private detail</html>', { status: 503, headers: { 'Content-Type': 'text/html' } }));
+  assert.equal(html.kind, 'unavailable');
+  assert.equal(html.providerCode, undefined);
 });
 
 test('Brevo adapter sends one plain-text message with a stable idempotency header', async () => {
@@ -88,6 +111,8 @@ test('request endpoint rejects unconfigured, unsigned, cross-site, and malformed
   assert.equal((await clubSiteRequestHandler(submission(), {} as NodeJS.ProcessEnv, sender)).status, 503);
   assert.equal((await clubSiteRequestHandler(submission(), env as NodeJS.ProcessEnv, sender)).status, 401);
   assert.equal((await clubSiteRequestHandler(submission('', form, 'https://other.example'), env as NodeJS.ProcessEnv, sender)).status, 403);
+  assert.equal((await clubSiteRequestHandler(new Request(requestPath, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) }), env as NodeJS.ProcessEnv, sender)).status, 403);
+  assert.equal((await clubSiteRequestHandler(new Request(requestPath, { method: 'POST', headers: { Origin: origin, 'Sec-Fetch-Site': 'cross-site', 'Content-Type': 'application/json' }, body: JSON.stringify(form) }), env as NodeJS.ProcessEnv, sender)).status, 403);
   assert.equal((await clubSiteRequestHandler(new Request(requestPath, { method: 'PUT' }), env as NodeJS.ProcessEnv, sender)).status, 405);
 });
 
@@ -147,6 +172,8 @@ test('signed-in request sends through Brevo, isolates identity, and recovers fro
       { ...form, purpose: '' },
       { ...form, submissionId: 'not-a-uuid' },
     ]) assert.equal((await clubSiteRequestHandler(submission(cookie, bad), env as NodeJS.ProcessEnv, send)).status, 400);
+    assert.equal((await clubSiteRequestHandler(new Request(requestPath, { method: 'POST', headers: { Origin: origin, Cookie: cookie, 'Content-Type': 'text/plain' }, body: JSON.stringify(form) }), env as NodeJS.ProcessEnv, send)).status, 415);
+    assert.equal((await clubSiteRequestHandler(submission(cookie, { ...form, purpose: 'x'.repeat(5000) }), env as NodeJS.ProcessEnv, send)).status, 400);
     assert.equal(sent.length, 2);
     assert.equal((await clubSiteRequestHandler(submission(cookie), { ...env, EMAIL_PROVIDER: '' } as NodeJS.ProcessEnv, send)).status, 503);
     const limited = await clubSiteRequestHandler(submission(cookie), env as NodeJS.ProcessEnv, async () => new Response('', { status: 429, headers: { 'Retry-After': '120' } }));
