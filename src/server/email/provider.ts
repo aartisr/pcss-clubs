@@ -13,7 +13,7 @@ export interface EmailProvider {
 
 export class EmailDeliveryError extends Error {
   constructor(
-    public readonly kind: 'rate-limited' | 'unavailable',
+    public readonly kind: 'rate-limited' | 'configuration' | 'unavailable',
     public readonly status?: number,
     public readonly providerCode?: string,
     public readonly retryAfterSeconds?: number,
@@ -40,5 +40,7 @@ export async function deliveryError(response: Response): Promise<EmailDeliveryEr
     }
   } catch { /* Provider returned no structured error. */ }
   const limited = response.status === 429 || providerCode === 'not_enough_credits' || providerCode === 'daily_quota_exceeded' || providerCode === 'monthly_quota_exceeded';
-  return new EmailDeliveryError(limited ? 'rate-limited' : 'unavailable', response.status, providerCode, retryAfterSeconds(response.headers.get('retry-after')));
+  const configuration = [400, 401, 402, 403].includes(response.status) && providerCode !== 'duplicate_request'
+    || ['unauthorized', 'permission_denied', 'account_under_validation'].includes(providerCode ?? '');
+  return new EmailDeliveryError(limited ? 'rate-limited' : configuration ? 'configuration' : 'unavailable', response.status, providerCode, retryAfterSeconds(response.headers.get('retry-after')));
 }

@@ -8,6 +8,7 @@ import { ResendEmailProvider } from '../src/server/email/resend.ts';
 import { deliveryError, EmailDeliveryError, retryAfterSeconds } from '../src/server/email/provider.ts';
 import { getEmailSettings } from '../src/server/email/config.ts';
 import { emailConfigIssues } from '../scripts/check-email-config.ts';
+import { checkBrevoConnection } from '../scripts/check-brevo-connection.ts';
 
 const origin = 'http://localhost:3000';
 const requestPath = `${origin}/api/club-site-requests`;
@@ -60,6 +61,31 @@ test('provider failures expose bounded retry guidance without leaking response t
   const html = await deliveryError(new Response('<html>private detail</html>', { status: 503, headers: { 'Content-Type': 'text/html' } }));
   assert.equal(html.kind, 'unavailable');
   assert.equal(html.providerCode, undefined);
+  const rejectedKey = await deliveryError(Response.json({ code: 'unauthorized', message: 'private provider detail' }, { status: 401 }));
+  assert.equal(rejectedKey.kind, 'configuration');
+  assert.equal(rejectedKey.providerCode, 'unauthorized');
+  assert.equal(rejectedKey.message, 'configuration');
+  const invalidPayload = await deliveryError(Response.json({ code: 'invalid_parameter' }, { status: 400 }));
+  assert.equal(invalidPayload.kind, 'configuration');
+  const transient = await deliveryError(new Response('', { status: 502 }));
+  assert.equal(transient.kind, 'unavailable');
+});
+
+test('Brevo connection check is read-only and keeps credentials and account details private', async () => {
+  assert.deepEqual(await checkBrevoConnection({} as NodeJS.ProcessEnv), { ok: false, reason: 'missing-key' });
+  const key = { BREVO_API_KEY: 'private-test-key' } as NodeJS.ProcessEnv;
+  const checked = await checkBrevoConnection(key, async (input, init) => {
+    assert.equal(input, 'https://api.brevo.com/v3/account');
+    assert.equal(init?.method, 'GET');
+    assert.equal((init?.headers as Record<string, string>)['api-key'], 'private-test-key');
+    assert.equal(init?.body, undefined);
+    return Response.json({ email: 'private@example.org', plan: [] });
+  });
+  assert.deepEqual(checked, { ok: true });
+  for (const [status, reason] of [[401, 'unauthorized'], [403, 'forbidden'], [429, 'rate-limited'], [500, 'provider-error']] as const) {
+    assert.deepEqual(await checkBrevoConnection(key, async () => new Response('private provider detail', { status })), { ok: false, reason, status });
+  }
+  assert.deepEqual(await checkBrevoConnection(key, async () => { throw new Error('private network detail'); }), { ok: false, reason: 'network-error' });
 });
 
 test('Brevo adapter sends one plain-text message with a stable idempotency header', async () => {
@@ -180,6 +206,9 @@ test('signed-in request sends through Brevo, isolates identity, and recovers fro
     assert.equal(limited.status, 429);
     assert.equal(limited.headers.get('retry-after'), '120');
     assert.deepEqual(await limited.json(), { code: 'EMAIL_LIMIT_REACHED' });
+    const unauthorized = await clubSiteRequestHandler(submission(cookie), env as NodeJS.ProcessEnv, async () => Response.json({ code: 'unauthorized', message: 'Do not show this to students' }, { status: 401 }));
+    assert.equal(unauthorized.status, 503);
+    assert.deepEqual(await unauthorized.json(), { code: 'EMAIL_SETUP_REQUIRED' });
     assert.equal((await clubSiteRequestHandler(submission(cookie), env as NodeJS.ProcessEnv, async () => new Response('', { status: 500 }))).status, 503);
   } finally {
     globalThis.fetch = oldFetch;

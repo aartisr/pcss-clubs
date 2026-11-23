@@ -14,6 +14,7 @@
     "check:build-deps": "node scripts/check-build-deps.cjs",
     "check:production-auth": "node --import tsx scripts/check-production-auth.ts",
     "check:email-config": "node --import tsx scripts/check-email-config.ts",
+    "check:brevo-connection": "node --import tsx scripts/check-brevo-connection.ts",
     "postbuild": "node --import tsx --test tests/generated-pages.test.ts tests/bundle-budget.test.ts",
     "test": "node --import tsx --test tests/puck-pages.test.tsx tests/registry-model.test.ts tests/auth.test.ts tests/auth-paths.test.ts tests/public-browsing.test.tsx tests/security.test.tsx tests/site-review.test.tsx tests/support-center.test.ts tests/club-site-requests.test.ts tests/member-schedule.test.ts",
     "preview": "vite preview",

@@ -113,6 +113,7 @@ export async function clubSiteRequestHandler(request: Request, env: NodeJS.Proce
       providerCode: error instanceof EmailDeliveryError ? error.providerCode : undefined,
     });
     if (error instanceof EmailDeliveryError && error.kind === 'rate-limited') return reply(429, { code: 'EMAIL_LIMIT_REACHED' }, error.retryAfterSeconds);
+    if (error instanceof EmailDeliveryError && error.kind === 'configuration') return reply(503, { code: 'EMAIL_SETUP_REQUIRED' });
     return reply(503, { code: 'EMAIL_UNAVAILABLE' });
   }
 }
