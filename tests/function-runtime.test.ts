@@ -63,6 +63,16 @@ test('all four emitted auth entries load through native Node ESM', async () => {
   }
 });
 
+test('club request function loads through native Node ESM and fails closed without sign-in', async () => {
+  const module = await import(pathToFileURL(path.join(emittedRoot, 'api/club-site-requests.js')).href);
+  assert.equal(typeof module.POST, 'function');
+  assert.equal(typeof module.GET, 'function');
+  assert.deepEqual(await (await module.GET(new Request(`${origin}/api/club-site-requests`))).json(), { available: false });
+  const response: Response = await module.POST(new Request(`${origin}/api/club-site-requests`, { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: '{}' }));
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).code, 'SIGN_IN_UNAVAILABLE');
+});
+
 test('deployed-style entrypoints give controlled responses without OIDC setup', async () => {
   await withOidcEnvironment({}, async () => {
     const session = await import(pathToFileURL(emittedRoute('session')).href);

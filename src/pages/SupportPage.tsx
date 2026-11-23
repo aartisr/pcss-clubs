@@ -5,7 +5,8 @@ import { SiteShell } from '../components/SiteShell';
 import { useAuth } from '../context/AuthContext';
 import { useRegistry } from '../context/RegistryContext';
 import { PUBLIC_CONTENT_VERIFIED } from '../data/publication';
-import { buildClubSiteRequestEmail, CLUB_SITE_REQUEST_EMAIL, SUPPORT_TOPICS, type ClubSiteRequestDraft } from '../data/supportCenter';
+import { CLUB_SITE_REQUEST_EMAIL, SUPPORT_TOPICS } from '../data/supportCenter';
+import { useClubSiteRequest, type ClubSiteRequestInput } from '../hooks/useClubSiteRequest';
 import { usePageMetadata } from '../hooks/usePageMetadata';
 import { AUTH_COPY } from '../data/authCopy';
 
@@ -17,11 +18,11 @@ export function SupportPage() {
   const [query, setQuery] = useState('');
   const [clubName, setClubName] = useState('');
   const [campusSlug, setCampusSlug] = useState('');
-  const [clubStatus, setClubStatus] = useState<ClubSiteRequestDraft['clubStatus']>('unsure');
+  const [clubStatus, setClubStatus] = useState<ClubSiteRequestInput['clubStatus']>('unsure');
   const [advisorName, setAdvisorName] = useState('');
   const [purpose, setPurpose] = useState('');
-  const [draftOpened, setDraftOpened] = useState(false);
-  const [requestError, setRequestError] = useState('');
+  const request = useClubSiteRequest();
+  const [formError, setFormError] = useState('');
   const search = query.trim().toLowerCase();
   const filteredTopics = useMemo(() => SUPPORT_TOPICS.filter((topic) => !search || `${topic.category} ${topic.question} ${topic.answer}`.toLowerCase().includes(search)), [search]);
   const signedInWithEmail = auth.capabilities.requestClubSite && Boolean(auth.user?.email);
@@ -33,25 +34,20 @@ export function SupportPage() {
     indexable: PUBLIC_CONTENT_VERIFIED,
   });
 
-  const openRequestDraft = (event: React.FormEvent<HTMLFormElement>) => {
+  const submitRequest = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!signedInWithEmail || !auth.user?.email) return;
+    if (!signedInWithEmail || request.pending || request.reference) return;
     if (!clubName.trim() || !purpose.trim()) {
-      setRequestError('Add your club name and what the page should help students do.');
+      setFormError('Add your club name and what the page should help students do.');
       return;
     }
     const campus = campuses.find((item) => item.slug === campusSlug);
     if (!campus) {
-      setRequestError('Choose your campus to continue.');
+      setFormError('Choose your campus to continue.');
       return;
     }
-    setRequestError('');
-    const href = buildClubSiteRequestEmail({
-      requesterName: auth.user.name || '', requesterEmail: auth.user.email,
-      clubName, campusName: campus.name, clubStatus, advisorName, purpose,
-    });
-    setDraftOpened(true);
-    window.location.href = href;
+    setFormError('');
+    void request.submit({ clubName, campusSlug, clubStatus, advisorName, purpose });
   };
 
   return (
@@ -106,24 +102,23 @@ export function SupportPage() {
                 <p className="mt-4 text-sm leading-7 text-slate-200">Tell us what your team needs. We’ll use your school account email to connect your request with you.</p>
                 <ol className="mt-8 space-y-4 text-sm text-slate-200">
                   <li className="flex gap-3"><span className="font-mono font-bold text-[#F7D46B]">01</span><span>Share your club and campus.</span></li>
-                  <li className="flex gap-3"><span className="font-mono font-bold text-[#F7D46B]">02</span><span>Open and send the prepared email.</span></li>
+                  <li className="flex gap-3"><span className="font-mono font-bold text-[#F7D46B]">02</span><span>Send your request here. No email app needed.</span></li>
                   <li className="flex gap-3"><span className="font-mono font-bold text-[#F7D46B]">03</span><span>The team reviews details and any needed school approvals before a public page is made.</span></li>
                 </ol>
               </div>
               <div className="p-6 sm:p-10">
-                {auth.status === 'loading' ? <p className="text-sm text-[#475569] dark:text-slate-300">Checking your school account…</p> : signedInWithEmail ? <form onSubmit={openRequestDraft} className="space-y-5">
-                  <div><p className="font-display text-xl font-bold text-[#0B2240] dark:text-white">Club website request</p><p className="mt-1 text-sm text-[#475569] dark:text-slate-300">Your draft will be addressed to <span className="break-all font-semibold">{CLUB_SITE_REQUEST_EMAIL}</span>.</p><p className="mt-1 break-all text-xs text-[#64748B] dark:text-slate-300">Requesting as {auth.user?.email}</p></div>
+                {auth.status === 'loading' ? <p className="text-sm text-[#475569] dark:text-slate-300">Checking your school account…</p> : signedInWithEmail ? request.availability === 'checking' ? <p role="status" className="text-sm text-[#475569] dark:text-slate-300">Checking request service…</p> : request.availability === 'unavailable' ? <div className="max-w-lg py-8"><h3 className="font-display text-xl font-bold text-[#0B2240] dark:text-white">Requests are temporarily unavailable</h3><p className="mt-3 text-sm leading-7 text-[#475569] dark:text-slate-300">The portal team needs to finish email setup or restore the request service. You can still browse clubs and support answers.</p><button type="button" onClick={() => void request.checkAvailability()} className="mt-5 rounded-xl bg-[#8B1E24] px-5 py-3 text-sm font-bold text-white">Check again</button></div> : request.reference ? <div role="status" className="max-w-lg py-8"><CheckCircle2 className="h-9 w-9 text-[#8B1E24] dark:text-[#FCA5A5]" aria-hidden="true" /><h3 className="mt-4 font-display text-2xl font-bold text-[#0B2240] dark:text-white">Request passed to the email service</h3><p className="mt-3 text-sm leading-7 text-[#475569] dark:text-slate-300">Reference {request.reference}. The team can review it when the email arrives. Delivery may be delayed if the service has reached its daily limit. This request does not approve or publish a club page.</p><button type="button" onClick={() => { request.reset(); setClubName(''); setCampusSlug(''); setClubStatus('unsure'); setAdvisorName(''); setPurpose(''); }} className="mt-5 text-sm font-semibold text-[#8B1E24] underline underline-offset-4 dark:text-[#FCA5A5]">Make another request</button></div> : <form onSubmit={submitRequest} className="space-y-5">
+                  <div><p className="font-display text-xl font-bold text-[#0B2240] dark:text-white">Club website request</p><p className="mt-1 text-sm text-[#475569] dark:text-slate-300">We’ll send your request to the Pioneer Clubs team. You won’t need an email app.</p><p className="mt-1 break-all text-xs text-[#64748B] dark:text-slate-300">We’ll reply to {auth.user?.email}</p></div>
                   <div className="grid gap-5 sm:grid-cols-2">
                     <label className="block text-sm font-semibold text-[#0B2240] dark:text-white">Club or team name<span aria-hidden="true"> *</span><input required maxLength={100} value={clubName} onChange={(event) => setClubName(event.target.value)} placeholder="e.g. Robotics Club" className="mt-2 block w-full rounded-xl border border-[#CBD5E1] bg-white px-3 py-3 text-sm text-[#0B2240] dark:border-[#1E3A5F] dark:bg-[#071120] dark:text-white" /></label>
                     <label className="block text-sm font-semibold text-[#0B2240] dark:text-white">Campus<span aria-hidden="true"> *</span><select required value={campusSlug} onChange={(event) => setCampusSlug(event.target.value)} className="mt-2 block w-full rounded-xl border border-[#CBD5E1] bg-white px-3 py-3 text-sm text-[#0B2240] dark:border-[#1E3A5F] dark:bg-[#071120] dark:text-white"><option value="">Choose your campus</option>{campuses.map((campus) => <option key={campus.id} value={campus.slug}>{campus.name}</option>)}</select></label>
                   </div>
-                  <label className="block text-sm font-semibold text-[#0B2240] dark:text-white">Where is your club in the school approval process?<select value={clubStatus} onChange={(event) => setClubStatus(event.target.value as ClubSiteRequestDraft['clubStatus'])} className="mt-2 block w-full rounded-xl border border-[#CBD5E1] bg-white px-3 py-3 text-sm text-[#0B2240] dark:border-[#1E3A5F] dark:bg-[#071120] dark:text-white"><option value="unsure">I’m not sure yet</option><option value="approved">Already approved</option><option value="seeking-approval">Seeking approval</option></select></label>
+                  <label className="block text-sm font-semibold text-[#0B2240] dark:text-white">Where is your club in the school approval process?<select value={clubStatus} onChange={(event) => setClubStatus(event.target.value as ClubSiteRequestInput['clubStatus'])} className="mt-2 block w-full rounded-xl border border-[#CBD5E1] bg-white px-3 py-3 text-sm text-[#0B2240] dark:border-[#1E3A5F] dark:bg-[#071120] dark:text-white"><option value="unsure">I’m not sure yet</option><option value="approved">Already approved</option><option value="seeking-approval">Seeking approval</option></select></label>
                   <label className="block text-sm font-semibold text-[#0B2240] dark:text-white">Advisor or mentor <span className="font-normal text-[#64748B] dark:text-slate-300">(optional)</span><input maxLength={100} value={advisorName} onChange={(event) => setAdvisorName(event.target.value)} placeholder="Name, if confirmed" className="mt-2 block w-full rounded-xl border border-[#CBD5E1] bg-white px-3 py-3 text-sm text-[#0B2240] dark:border-[#1E3A5F] dark:bg-[#071120] dark:text-white" /></label>
                   <label className="block text-sm font-semibold text-[#0B2240] dark:text-white">What should the website help students do?<span aria-hidden="true"> *</span><textarea required maxLength={700} rows={4} value={purpose} onChange={(event) => setPurpose(event.target.value)} placeholder="Share your goal, activities, or what students should be able to find." className="mt-2 block w-full resize-y rounded-xl border border-[#CBD5E1] bg-white px-3 py-3 text-sm leading-6 text-[#0B2240] dark:border-[#1E3A5F] dark:bg-[#071120] dark:text-white" /></label>
                   <p className="text-xs leading-5 text-[#64748B] dark:text-slate-300">Please leave out private student details and photos. A request does not approve a club or publish a page.</p>
-                  {requestError && <p role="alert" className="rounded-xl bg-[#FFF4F2] p-3 text-sm font-semibold text-[#8B1E24] dark:bg-[#3B2026] dark:text-[#FCA5A5]">{requestError}</p>}
-                  <button type="submit" className="site-action inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#8B1E24] px-5 py-3 text-sm font-bold text-white hover:bg-[#A61C24]"><Send className="h-4 w-4" aria-hidden="true" />Open email draft</button>
-                  {draftOpened && <p role="status" className="flex items-start gap-2 text-sm leading-6 text-[#0B2240] dark:text-slate-200"><CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-[#8B1E24] dark:text-[#FCA5A5]" aria-hidden="true" />Send the draft in your email app to complete your request. Nothing was submitted by this website.</p>}
+                  {(formError || request.error) && <p role="alert" className="rounded-xl bg-[#FFF4F2] p-3 text-sm font-semibold text-[#8B1E24] dark:bg-[#3B2026] dark:text-[#FCA5A5]">{formError || request.error}{request.error.includes('sign-in has ended') && <button type="button" onClick={() => void auth.signIn('/support#request-club-site')} className="ml-2 underline underline-offset-2">Sign in again</button>}</p>}
+                  <button type="submit" disabled={request.pending} className="site-action inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#8B1E24] px-5 py-3 text-sm font-bold text-white hover:bg-[#A61C24] disabled:opacity-60"><Send className="h-4 w-4" aria-hidden="true" />{request.pending ? 'Sending request…' : 'Send request'}</button>
                 </form> : <div className="max-w-lg">
                   <p className="font-display text-xl font-bold text-[#0B2240] dark:text-white">{auth.authenticated ? 'Use an eligible school account' : 'Sign in to make a request'}</p>
                   <p className="mt-3 text-sm leading-7 text-[#475569] dark:text-slate-300">{auth.authenticated ? 'This account cannot request a club website. Choose a school account with an email address so the team can follow up.' : 'Club website requests are for signed-in school members, so the team knows how to follow up. You can browse the answers above without signing in.'}</p>

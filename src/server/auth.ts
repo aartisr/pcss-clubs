@@ -127,6 +127,13 @@ function isSchoolMember(identity: Identity, config: AuthConfig): boolean {
   return Boolean(domain && identity.emailVerified && identity.hostedDomain?.toLowerCase() === domain && identity.email?.toLowerCase().endsWith(`@${domain}`));
 }
 
+export function schoolMemberSession(request: Request, config: AuthConfig): { sub: string; name: string; email: string } | null {
+  const identity = session(request, config);
+  return identity && isSchoolMember(identity, config) && identity.email
+    ? { sub: identity.sub, name: identity.name || 'School member', email: identity.email }
+    : null;
+}
+
 function session(request: Request, config: AuthConfig): Identity | null {
   const identity = open<Identity>(cookieValue(request, cookieName(config, 'session')), config.key);
   return identity && normalizedIssuer(identity.issuer) === config.issuer && (canEdit(identity, config) || isSchoolMember(identity, config)) ? identity : null;

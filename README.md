@@ -6,6 +6,8 @@ A club can be the start of a new skill, a friendship, or a sense of belonging. *
 
 This repository is a working prototype, built to grow with verified school and club information.
 
+For a plain-language view of the experience, components, and launch decisions, see the [leadership architecture diagram](docs/leadership-architecture.md).
+
 ## What works today
 
 - **Discover clubs:** Browse by campus, search by name or details, and filter by category or meeting day. Quick search and light/dark themes are included.
@@ -13,7 +15,7 @@ This repository is a working prototype, built to grow with verified school and c
 - **Shape every page:** Use Puck to edit the home, campus, credits, and club layouts. Optional blocks include announcements, leadership, achievements, photos, and resources.
 - **Grow the directory:** Add, edit, move, clone, or delete schools and clubs; import or export a registry snapshot as JSON.
 - **Prepare for publication:** The build generates route-specific HTML, structured data, `robots.txt`, and a sitemap for the checked-in records.
-- **Get help:** The [Support Center](src/pages/SupportPage.tsx) answers common questions and lets signed-in school members prepare a club website request to `pcss2robotics@pioneercss.org`. The member sends the prefilled draft from their email app; opening it is not a submission. See the [support design research](docs/support-center-research.md).
+- **Get help:** The [Support Center](src/pages/SupportPage.tsx) answers common questions. Signed-in school members can send club website requests from the site when [email delivery](docs/email-provider-setup.md) is configured; no email app opens. The team still reviews every request before a page is published.
 
 ## What is still a prototype
 

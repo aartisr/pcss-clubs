@@ -9,6 +9,6 @@
     "outDir": "tmp/function-esm",
     "types": ["node"]
   },
-  "include": ["api/auth/*.ts", "src/server/auth.ts", "src/shared/authReturn.ts"],
+  "include": ["api/auth/*.ts", "api/club-site-requests.ts", "src/server/auth.ts", "src/server/clubSiteRequests.ts", "src/server/email/*.ts", "src/shared/authReturn.ts", "src/data/registry.ts", "src/data/supportCenter.ts"],
   "exclude": ["dist", "tmp"]
 }

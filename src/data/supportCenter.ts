@@ -60,7 +60,7 @@ export interface ClubSiteRequestDraft {
   purpose: string;
 }
 
-export function buildClubSiteRequestEmail(draft: ClubSiteRequestDraft): string {
+export function formatClubSiteRequestEmail(draft: ClubSiteRequestDraft, requestId: string): { subject: string; text: string } {
   const oneLine = (value: string) => value.replace(/[\r\n]+/g, ' ').trim();
   const status = {
     approved: 'Already approved by the school',
@@ -70,7 +70,8 @@ export function buildClubSiteRequestEmail(draft: ClubSiteRequestDraft): string {
   const body = [
     'Hello Pioneer Clubs team,',
     '',
-    'I would like to request a club website for our team.',
+    'A school member has requested a club website for their team.',
+    `Request reference: ${requestId}`,
     '',
     `Club or team: ${oneLine(draft.clubName)}`,
     `Campus: ${oneLine(draft.campusName)}`,
@@ -82,7 +83,7 @@ export function buildClubSiteRequestEmail(draft: ClubSiteRequestDraft): string {
     '',
     `Requested by: ${oneLine(draft.requesterName) || 'School member'} <${oneLine(draft.requesterEmail)}>`,
     '',
-    'I understand that this request does not create or approve a public club page automatically.',
+    'This request does not create or approve a public club page automatically. Details supplied by the requester have not been verified.',
   ].join('\n');
-  return `mailto:${CLUB_SITE_REQUEST_EMAIL}?subject=${encodeURIComponent(`Club website request: ${oneLine(draft.clubName)}`)}&body=${encodeURIComponent(body)}`;
+  return { subject: `Club website request: ${oneLine(draft.clubName)}`, text: body };
 }

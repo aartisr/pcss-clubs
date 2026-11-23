@@ -1,5 +1,7 @@
 # Support Center research and design decisions
 
+The original email-draft handoff described below has been replaced by an in-site server submission. See [email provider setup](email-provider-setup.md) for the current behavior and limits. The research patterns remain useful as design history.
+
 Researched November 22, 2026. These five references are official help or support pages, not templates to copy. Their products are much larger than this student-run portal, so the implementation keeps only what earns its space.
 
 | Reference | Observed pattern | PCSS adaptation |

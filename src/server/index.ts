@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveTenantFromRequest } from '../middleware/tenantRouting.ts';
 import { authHandler } from './auth.ts';
+import { clubSiteRequestHandler } from './clubSiteRequests.ts';
 import { SECURITY_HEADERS } from './securityHeaders.ts';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -17,6 +18,12 @@ async function startServer() {
     const { loadEnv } = await import('vite');
     const localAuthEnv = loadEnv('development', process.cwd(), 'OIDC_');
     for (const [key, value] of Object.entries(localAuthEnv)) process.env[key] ??= value;
+    const localEmailEnv = loadEnv('development', process.cwd(), 'BREVO_');
+    for (const [key, value] of Object.entries(localEmailEnv)) process.env[key] ??= value;
+    for (const key of ['EMAIL_PROVIDER', 'CLUB_SITE_REQUEST_RECIPIENT']) {
+      const value = loadEnv('development', process.cwd(), key)[key];
+      if (value) process.env[key] ??= value;
+    }
   }
   const app = express();
   app.disable('x-powered-by');
@@ -64,6 +71,16 @@ async function startServer() {
     response.headers.forEach((value, key) => { if (key !== 'set-cookie') res.setHeader(key, value); });
     const cookies = response.headers.getSetCookie();
     if (cookies.length) res.setHeader('Set-Cookie', cookies);
+    res.send(await response.text());
+  });
+
+  app.all('/api/club-site-requests', express.text({ type: '*/*', limit: '4kb' }), async (req, res) => {
+    const origin = `${req.protocol}://${req.get('host')}`;
+    const headers = new Headers();
+    for (const [key, value] of Object.entries(req.headers)) if (typeof value === 'string') headers.set(key, value);
+    const response = await clubSiteRequestHandler(new Request(new URL(req.originalUrl, origin), { method: req.method, headers, ...(['POST', 'PUT', 'PATCH'].includes(req.method) ? { body: typeof req.body === 'string' ? req.body : '' } : {}) }));
+    res.status(response.status);
+    response.headers.forEach((value, key) => res.setHeader(key, value));
     res.send(await response.text());
   });
 

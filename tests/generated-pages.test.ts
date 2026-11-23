@@ -85,8 +85,7 @@ describe('generated public pages', () => {
     const support = fs.readFileSync(path.join(dist, 'support/index.html'), 'utf8');
     assert.match(support, /Support Center/);
     assert.match(support, /Does saving a club mean I joined it/);
-    assert.match(support, /pcss2robotics@pioneercss.org/);
-    assert.match(support, /email app must send the draft/);
+    assert.match(support, /No email app is needed/);
     assert.equal(support.includes('noindex, follow'), !PUBLIC_CONTENT_VERIFIED);
   });
 

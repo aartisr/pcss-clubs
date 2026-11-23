@@ -7,7 +7,7 @@ import { INITIAL_CAMPUSES, INITIAL_CLUBS, type Campus, type Club } from '../src/
 import { PUBLIC_CONTENT_VERIFIED } from '../src/data/publication';
 import { parseSiteReviewMode, siteReviewCopy } from '../src/data/siteReview';
 import { PRIVACY_PAGE, TERMS_PAGE, type LegalParagraph } from '../src/data/legalPages';
-import { CLUB_SITE_REQUEST_EMAIL, SUPPORT_TOPICS } from '../src/data/supportCenter';
+import { SUPPORT_TOPICS } from '../src/data/supportCenter';
 import { createDefaultPageData, pagePath } from '../src/puck/pageModel';
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -190,7 +190,7 @@ save('credits/index.html', decorate(credits, {
   },
 }));
 
-const supportContent = `<h1>Support Center</h1><p>Find help with Pioneer Clubs and request a website for your club or team.</p><section><h2>Common questions</h2>${SUPPORT_TOPICS.map((topic) => `<article><h3>${escapeHtml(topic.question)}</h3><p>${escapeHtml(topic.answer)}</p></article>`).join('')}</section><section><h2>Request a club website</h2><p>Sign in with your school account to prepare a request to ${escapeHtml(CLUB_SITE_REQUEST_EMAIL)}. Your email app must send the draft before the request reaches the team.</p></section>`;
+const supportContent = `<h1>Support Center</h1><p>Find help with Pioneer Clubs and request a website for your club or team.</p><section><h2>Common questions</h2>${SUPPORT_TOPICS.map((topic) => `<article><h3>${escapeHtml(topic.question)}</h3><p>${escapeHtml(topic.answer)}</p></article>`).join('')}</section><section><h2>Request a club website</h2><p>Sign in with your school account to send a request to the portal team. No email app is needed. The team reviews requests before any page is published.</p></section>`;
 save('support/index.html', decorate(home, {
   title: 'Support Center | Pioneer Clubs',
   description: 'Find help with Pioneer Clubs, correct a listing, and request a website for your club or team.',
