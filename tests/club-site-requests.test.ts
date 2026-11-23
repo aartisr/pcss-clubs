@@ -65,6 +65,17 @@ test('provider failures expose bounded retry guidance without leaking response t
   assert.equal(rejectedKey.kind, 'configuration');
   assert.equal(rejectedKey.providerCode, 'unauthorized');
   assert.equal(rejectedKey.message, 'configuration');
+  assert.equal(rejectedKey.providerHint, undefined);
+  for (const [message, hint] of [
+    ['Access denied for resource "smtp"', 'permission-denied'],
+    ['IP address is not authorized', 'ip-blocked'],
+    ['Invalid API key', 'key-rejected'],
+    ['API key has been deactivated', 'key-inactive'],
+  ] as const) {
+    const classified = await deliveryError(Response.json({ code: 'unauthorized', message }, { status: 401 }));
+    assert.equal(classified.providerHint, hint);
+    assert.equal(classified.message, 'configuration');
+  }
   const invalidPayload = await deliveryError(Response.json({ code: 'invalid_parameter' }, { status: 400 }));
   assert.equal(invalidPayload.kind, 'configuration');
   const transient = await deliveryError(new Response('', { status: 502 }));
@@ -75,7 +86,7 @@ test('Brevo connection check is read-only and keeps credentials and account deta
   assert.deepEqual(await checkBrevoConnection({} as NodeJS.ProcessEnv), { ok: false, reason: 'missing-key' });
   const key = { BREVO_API_KEY: 'private-test-key' } as NodeJS.ProcessEnv;
   const checked = await checkBrevoConnection(key, async (input, init) => {
-    assert.equal(input, 'https://api.brevo.com/v3/account');
+  assert.equal(input, 'https://api.brevo.com/v3/smtp/statistics/aggregatedReport?days=1');
     assert.equal(init?.method, 'GET');
     assert.equal((init?.headers as Record<string, string>)['api-key'], 'private-test-key');
     assert.equal(init?.body, undefined);
@@ -85,6 +96,7 @@ test('Brevo connection check is read-only and keeps credentials and account deta
   for (const [status, reason] of [[401, 'unauthorized'], [403, 'forbidden'], [429, 'rate-limited'], [500, 'provider-error']] as const) {
     assert.deepEqual(await checkBrevoConnection(key, async () => new Response('private provider detail', { status })), { ok: false, reason, status });
   }
+  assert.deepEqual(await checkBrevoConnection(key, async () => Response.json({ code: 'unauthorized', message: 'Access denied for resource "smtp"' }, { status: 401 })), { ok: false, reason: 'unauthorized', status: 401, providerHint: 'permission-denied' });
   assert.deepEqual(await checkBrevoConnection(key, async () => { throw new Error('private network detail'); }), { ok: false, reason: 'network-error' });
 });
 
@@ -206,9 +218,20 @@ test('signed-in request sends through Brevo, isolates identity, and recovers fro
     assert.equal(limited.status, 429);
     assert.equal(limited.headers.get('retry-after'), '120');
     assert.deepEqual(await limited.json(), { code: 'EMAIL_LIMIT_REACHED' });
-    const unauthorized = await clubSiteRequestHandler(submission(cookie), env as NodeJS.ProcessEnv, async () => Response.json({ code: 'unauthorized', message: 'Do not show this to students' }, { status: 401 }));
+    const failureLogs: unknown[][] = [];
+    const originalConsoleError = console.error;
+    console.error = (...args: unknown[]) => { failureLogs.push(args); };
+    let unauthorized: Response;
+    try {
+      unauthorized = await clubSiteRequestHandler(submission(cookie), env as NodeJS.ProcessEnv, async () => Response.json({ code: 'unauthorized', message: 'IP address not authorized: private details' }, { status: 401 }));
+    } finally {
+      console.error = originalConsoleError;
+    }
     assert.equal(unauthorized.status, 503);
     assert.deepEqual(await unauthorized.json(), { code: 'EMAIL_SETUP_REQUIRED' });
+    assert.equal(failureLogs.length, 1);
+    assert.deepEqual(failureLogs[0][1], { requestId: receipt.requestId, provider: 'brevo', kind: 'configuration', status: 401, providerCode: 'unauthorized', providerHint: 'ip-blocked' });
+    assert.doesNotMatch(JSON.stringify(failureLogs), /private details|student@pioneercss\.org|test-server-only-key/);
     assert.equal((await clubSiteRequestHandler(submission(cookie), env as NodeJS.ProcessEnv, async () => new Response('', { status: 500 }))).status, 503);
   } finally {
     globalThis.fetch = oldFetch;
